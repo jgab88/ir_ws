@@ -1,15 +1,5 @@
 /*
- Basic MQTT example
-
- This sketch demonstrates the basic capabilities of the library.
- It connects to an MQTT server then:
-  - publishes "hello world" to the topic "outTopic"
-  - subscribes to the topic "inTopic", printing out any messages
-    it receives. NB - it assumes the received payloads are strings not binary
-
- It will reconnect to the server if the connection is lost using a blocking
- reconnect function. See the 'mqtt_reconnect_nonblocking' example for how to
- achieve the same result without blocking the main loop.
+TESTING
  
 */
 
@@ -18,23 +8,25 @@
 #include <PubSubClient.h>
 #include <AccelStepper.h>
 
+// Update these with values suitable for your network.
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // Replace with your Ethernet board's MAC address
+IPAddress ip(192, 168, 0, 110); //Replace with the right ip for the microcontroller
+IPAddress server(192, 168, 0, 52); //Replace with the right MQTT server address
+
 // Define stepper motor pins
 #define STEP_PIN_LEFT 2
 #define DIR_PIN_LEFT 3
 #define STEP_PIN_RIGHT 4
 #define DIR_PIN_RIGHT 5
 
-// Initialize the AccelStepper instance
+// Initialize the AccelStepper instances
 AccelStepper stepperLeft(AccelStepper::DRIVER, STEP_PIN_LEFT, DIR_PIN_LEFT);
 AccelStepper stepperRight(AccelStepper::DRIVER, STEP_PIN_RIGHT, DIR_PIN_RIGHT);
 
-// Update these with values suitable for your network.
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // Replace with your Ethernet board's MAC address
-IPAddress ip(192, 168, 0, 110);
-IPAddress server(192, 168, 0, 52);
+EthernetClient ethClient;
+PubSubClient client(ethClient);
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  
   String topicStr = String(topic);
   String payloadStr = "";
 
@@ -49,11 +41,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
     float frequency = payloadStr.toFloat();
 
     // Set the left stepper motor's frequency and direction
+    stepperLeft.setMaxSpeed(abs(frequency));
     if (frequency > 0) {
-      stepperLeft.setMaxSpeed(abs(frequency));
+      digitalWrite(DIR_PIN_LEFT, HIGH); // Set direction pin for clockwise
       stepperLeft.setSpeed(abs(frequency));
     } else {
-      stepperLeft.setMaxSpeed(abs(frequency));
+      digitalWrite(DIR_PIN_LEFT, LOW); // Set direction pin for counterclockwise
       stepperLeft.setSpeed(-abs(frequency));
     }
   }
@@ -63,47 +56,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
     float frequency = payloadStr.toFloat();
 
     // Set the right stepper motor's frequency and direction
+    stepperRight.setMaxSpeed(abs(frequency));
     if (frequency > 0) {
-      stepperRight.setMaxSpeed(abs(frequency));
+      digitalWrite(DIR_PIN_RIGHT, HIGH); // Set direction pin for clockwise
       stepperRight.setSpeed(abs(frequency));
     } else {
-      stepperRight.setMaxSpeed(abs(frequency));
+      digitalWrite(DIR_PIN_RIGHT, LOW); // Set direction pin for counterclockwise
       stepperRight.setSpeed(-abs(frequency));
-    }
-  }
-  
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-
-
-
-}
-
-EthernetClient ethClient;
-PubSubClient client(ethClient);
-
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect("arduinoClient")) {
-      Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish("outTopic", "hello world");
-      // ... and resubscribe
-      client.subscribe("inTopic");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
     }
   }
 }
@@ -118,24 +77,13 @@ void setup() {
   // Allow the hardware to sort itself out
   delay(1500);
 
-  // Check if the Teensy has obtained an IP address
-  IPAddress teensyIP = Ethernet.localIP();
-  if (teensyIP == INADDR_NONE) {
-    Serial.println("Failed to obtain an IP address");
-    // Handle the error condition
-  } else {
-    Serial.print("Teensy IP address: ");
-    Serial.println(teensyIP);
-  }
-  
-  // Set the maximum speed and acceleration for the stepper motors
-  stepperLeft.setMaxSpeed(5000); // Replace with your desired maximum speed
+  // Set the maximum acceleration for the stepper motors
   stepperLeft.setAcceleration(100); // Replace with your desired acceleration
-
-  stepperRight.setMaxSpeed(5000); // Replace with your desired maximum speed
   stepperRight.setAcceleration(100); // Replace with your desired acceleration
 
-
+  // Set the direction pins as outputs
+  pinMode(DIR_PIN_LEFT, OUTPUT);
+  pinMode(DIR_PIN_RIGHT, OUTPUT);
 }
 
 void loop() {
@@ -147,4 +95,20 @@ void loop() {
   // Update the stepper motor positions
   stepperLeft.run();
   stepperRight.run();
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect("arduinoClient")) {
+      Serial.println("connected");
+      client.subscribe("Left");
+      client.subscribe("Right");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
 }
