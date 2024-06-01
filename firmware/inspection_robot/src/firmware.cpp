@@ -50,6 +50,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // Parse the payload as a float value (frequency)
     float frequency = payloadStr.toFloat();
 
+    // Print the received topic and payload
+    Serial.print("Received topic: ");
+    Serial.print(topicStr);
+    Serial.print(", Payload: ");
+    Serial.println(payloadStr);
+
     // Set the left stepper motor's speed (direction is handled by AccelStepper)
     stepperLeft.setMaxSpeed(abs(frequency));
     stepperLeft.setSpeed(frequency);
@@ -58,6 +64,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
   else if (topicStr == "Right") {
     // Parse the payload as a float value (frequency)
     float frequency = payloadStr.toFloat();
+
+    // Print the received topic and payload
+    Serial.print("Received topic: ");
+    Serial.print(topicStr);
+    Serial.print(", Payload: ");
+    Serial.println(payloadStr);
 
     // Set the right stepper motor's speed (direction is handled by AccelStepper)
     stepperRight.setMaxSpeed(abs(frequency));
@@ -117,3 +129,4 @@ void reconnect() {
     }
   }
 }
+
