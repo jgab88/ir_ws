@@ -18,23 +18,25 @@
 #include <PubSubClient.h>
 #include <AccelStepper.h>
 
+// Update these with values suitable for your network.
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // Replace with your Ethernet board's MAC address
+IPAddress ip(192, 168, 1, 110);
+IPAddress server(192, 168, 0, 52);
+
 // Define stepper motor pins
 #define STEP_PIN_LEFT 2
 #define DIR_PIN_LEFT 3
 #define STEP_PIN_RIGHT 4
 #define DIR_PIN_RIGHT 5
 
-// Initialize the AccelStepper instance
+// Initialize the AccelStepper instances
 AccelStepper stepperLeft(AccelStepper::DRIVER, STEP_PIN_LEFT, DIR_PIN_LEFT);
 AccelStepper stepperRight(AccelStepper::DRIVER, STEP_PIN_RIGHT, DIR_PIN_RIGHT);
 
-// Update these with values suitable for your network.
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // Replace with your Ethernet board's MAC address
-IPAddress ip(192, 168, 0, 110);
-IPAddress server(192, 168, 0, 52);
+EthernetClient ethClient;
+PubSubClient client(ethClient);
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  
   String topicStr = String(topic);
   String payloadStr = "";
 
@@ -48,63 +50,18 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // Parse the payload as a float value (frequency)
     float frequency = payloadStr.toFloat();
 
-    // Set the left stepper motor's frequency and direction
-    if (frequency > 0) {
-      stepperLeft.setMaxSpeed(abs(frequency));
-      stepperLeft.setSpeed(abs(frequency));
-    } else {
-      stepperLeft.setMaxSpeed(abs(frequency));
-      stepperLeft.setSpeed(-abs(frequency));
-    }
+    // Set the left stepper motor's speed (direction is handled by AccelStepper)
+    stepperLeft.setMaxSpeed(abs(frequency));
+    stepperLeft.setSpeed(frequency);
   }
   // Check if the received topic is "Right"
   else if (topicStr == "Right") {
     // Parse the payload as a float value (frequency)
     float frequency = payloadStr.toFloat();
 
-    // Set the right stepper motor's frequency and direction
-    if (frequency > 0) {
-      stepperRight.setMaxSpeed(abs(frequency));
-      stepperRight.setSpeed(abs(frequency));
-    } else {
-      stepperRight.setMaxSpeed(abs(frequency));
-      stepperRight.setSpeed(-abs(frequency));
-    }
-  }
-  
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-
-
-
-}
-
-EthernetClient ethClient;
-PubSubClient client(ethClient);
-
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect("arduinoClient")) {
-      Serial.println("connected");
-      // Once connected, publish an announcement...
-      client.publish("outTopic", "hello world");
-      // ... and resubscribe
-      client.subscribe("inTopic");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+    // Set the right stepper motor's speed (direction is handled by AccelStepper)
+    stepperRight.setMaxSpeed(abs(frequency));
+    stepperRight.setSpeed(frequency);
   }
 }
 
@@ -118,6 +75,10 @@ void setup() {
   // Allow the hardware to sort itself out
   delay(1500);
 
+  // Set the maximum acceleration for the stepper motors
+  stepperLeft.setAcceleration(100); // Replace with your desired acceleration
+  stepperRight.setAcceleration(100); // Replace with your desired acceleration
+
   // Check if the Teensy has obtained an IP address
   IPAddress teensyIP = Ethernet.localIP();
   if (teensyIP == INADDR_NONE) {
@@ -127,14 +88,6 @@ void setup() {
     Serial.print("Teensy IP address: ");
     Serial.println(teensyIP);
   }
-  
-  // Set the maximum speed and acceleration for the stepper motors
-  stepperLeft.setMaxSpeed(5000); // Replace with your desired maximum speed
-  stepperLeft.setAcceleration(100); // Replace with your desired acceleration
-
-  stepperRight.setMaxSpeed(5000); // Replace with your desired maximum speed
-  stepperRight.setAcceleration(100); // Replace with your desired acceleration
-
 
 }
 
@@ -147,4 +100,20 @@ void loop() {
   // Update the stepper motor positions
   stepperLeft.run();
   stepperRight.run();
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect("arduinoClient")) {
+      Serial.println("connected");
+      client.subscribe("Left");
+      client.subscribe("Right");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
 }
