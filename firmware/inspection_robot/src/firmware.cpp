@@ -1,27 +1,12 @@
-/*
- Basic MQTT example
-
- This sketch demonstrates the basic capabilities of the library.
- It connects to an MQTT server then:
-  - publishes "hello world" to the topic "outTopic"
-  - subscribes to the topic "inTopic", printing out any messages
-    it receives. NB - it assumes the received payloads are strings not binary
-
- It will reconnect to the server if the connection is lost using a blocking
- reconnect function. See the 'mqtt_reconnect_nonblocking' example for how to
- achieve the same result without blocking the main loop.
- 
-*/
-
 #include <SPI.h>
 #include <NativeEthernet.h>
 #include <PubSubClient.h>
 #include <AccelStepper.h>
 
 // Update these with values suitable for your network.
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; // Replace with your Ethernet board's MAC address
-IPAddress ip(192, 168, 1, 110);
-IPAddress server(192, 168, 0, 52);
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}; // Replace with your Ethernet board's MAC address
+IPAddress ip(172, 16, 0, 110);
+IPAddress server(172, 16, 0, 45);
 
 // Define stepper motor pins
 #define STEP_PIN_LEFT 2
@@ -36,44 +21,49 @@ AccelStepper stepperRight(AccelStepper::DRIVER, STEP_PIN_RIGHT, DIR_PIN_RIGHT);
 EthernetClient ethClient;
 PubSubClient client(ethClient);
 
+// Scale factor for converting trigger values to motor frequency
+float scaleFactor = 2.0; // Initial scale factor (adjust as needed)
+
 void callback(char* topic, byte* payload, unsigned int length) {
   String topicStr = String(topic);
   String payloadStr = "";
-
-  // Convert the payload to a string
   for (unsigned int i = 0; i < length; i++) {
     payloadStr += (char)payload[i];
   }
 
-  // Check if the received topic is "Left"
-  if (topicStr == "Left") {
-    // Parse the payload as a float value (frequency)
-    float frequency = payloadStr.toFloat();
-
-    // Print the received topic and payload
-    Serial.print("Received topic: ");
-    Serial.print(topicStr);
-    Serial.print(", Payload: ");
+  if (topicStr == "IR/Controller/Left/Speed") {
+    // Handle left speed
+    Serial.print("Left Speed: ");
     Serial.println(payloadStr);
-
+    // Parse the payload as an integer value (trigger value)
+    int triggerValue = payloadStr.toInt();
+    // Scale the trigger value to motor frequency
+    float speed = triggerValue * scaleFactor;
     // Set the left stepper motor's speed (direction is handled by AccelStepper)
-    stepperLeft.setMaxSpeed(abs(frequency));
-    stepperLeft.setSpeed(frequency);
-  }
-  // Check if the received topic is "Right"
-  else if (topicStr == "Right") {
-    // Parse the payload as a float value (frequency)
-    float frequency = payloadStr.toFloat();
-
-    // Print the received topic and payload
-    Serial.print("Received topic: ");
-    Serial.print(topicStr);
-    Serial.print(", Payload: ");
+    stepperLeft.setMaxSpeed(10000); // Set the maximum speed (adjust as needed)
+    stepperLeft.setSpeed(speed);
+  } else if (topicStr == "IR/Controller/Right/Speed") {
+    // Handle right speed
+    Serial.print("Right Speed: ");
     Serial.println(payloadStr);
-
+    // Parse the payload as an integer value (trigger value)
+    int triggerValue = payloadStr.toInt();
+    // Scale the trigger value to motor frequency
+    float speed = triggerValue * scaleFactor;
     // Set the right stepper motor's speed (direction is handled by AccelStepper)
-    stepperRight.setMaxSpeed(abs(frequency));
-    stepperRight.setSpeed(frequency);
+    stepperRight.setMaxSpeed(10000); // Set the maximum speed (adjust as needed)
+    stepperRight.setSpeed(speed);
+  } else if (topicStr == "IR/Controller/Dir_mode") {
+    // Handle direction mode
+    Serial.print("Direction Mode: ");
+    Serial.println(payloadStr);
+    // Add your code to handle the direction mode here
+  } else if (topicStr == "IR/Controller/Scale_factor") {
+    // Handle scale factor
+    Serial.print("Scale Factor: ");
+    Serial.println(payloadStr);
+    // Parse the payload as a float value (scale factor)
+    scaleFactor = payloadStr.toFloat();
   }
 }
 
@@ -90,28 +80,6 @@ void setup() {
   // Set the maximum acceleration for the stepper motors
   stepperLeft.setAcceleration(100); // Replace with your desired acceleration
   stepperRight.setAcceleration(100); // Replace with your desired acceleration
-
-  // Check if the Teensy has obtained an IP address
-  IPAddress teensyIP = Ethernet.localIP();
-  if (teensyIP == INADDR_NONE) {
-    Serial.println("Failed to obtain an IP address");
-    // Handle the error condition
-  } else {
-    Serial.print("Teensy IP address: ");
-    Serial.println(teensyIP);
-  }
-
-}
-
-void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
-
-  // Update the stepper motor positions
-  stepperLeft.run();
-  stepperRight.run();
 }
 
 void reconnect() {
@@ -119,8 +87,10 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     if (client.connect("arduinoClient")) {
       Serial.println("connected");
-      client.subscribe("Left");
-      client.subscribe("Right");
+      client.subscribe("IR/Controller/Left/Speed");
+      client.subscribe("IR/Controller/Right/Speed");
+      client.subscribe("IR/Controller/Dir_mode");
+      client.subscribe("IR/Controller/Scale_factor");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -130,3 +100,15 @@ void reconnect() {
   }
 }
 
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop(); // Call client.loop() frequently
+
+  // Update the stepper motor positions
+  stepperLeft.run();
+  stepperRight.run();
+
+  // Add your code to handle stepper motor movements based on the received MQTT messages
+}
